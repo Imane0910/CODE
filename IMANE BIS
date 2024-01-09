@@ -1,0 +1,87 @@
+import pandas as pd
+# Bloomberg
+from xbbg import blp
+from datetime import datetime
+import xlwings as xw
+
+import os
+
+
+import openpyxl
+
+def lire_colonne_quotation_reference(chemin_fichier):
+  
+    fichier_excel = openpyxl.load_workbook(chemin_fichier)
+
+
+    onglet_data = fichier_excel["data"]
+
+
+    ligne = 2
+
+# lecture de la colonne des taux interbancaires
+
+    while onglet_data.cell(row=ligne, column=1).value is not None:
+        quotation_reference = onglet_data.cell(row=ligne, column=1).value
+        print(f"Quotation Reference à la ligne {ligne}: {quotation_reference}")
+        ligne += 1
+
+# aller check le ticker sur bblg 
+
+def obtenir_cours_bloomberg(quotation_reference):
+    try:
+        cours = blp.bdp(quotation_reference, 'PX_LAST', dt=datetime.now(), include_empty=False)
+        if cours is not None:
+            return cours[0]
+        else:
+            return None
+    except Exception as e:
+        print(f"Erreur lors de la récupération du cours Bloomberg pour {quotation_reference}: {str(e)}")
+        return None
+    
+ request = session.getService("//blp/refdata").createRequest("ReferenceDataRequest")
+    request.getElement("securities").appendValue(quotation_reference)
+    request.getElement("fields").appendValue("LAST_PRICE")
+    request.set("startDate", datetime.now().strftime("%Y%m%d"))
+    request.set("endDate", datetime.now().strftime("%Y%m%d"))
+
+    session.sendRequest(request)
+
+    cours = None
+    while True:
+        event = session.nextEvent(500)
+        if event.eventType() == blpapi.Event.RESPONSE:
+            securities_data = event.getElement("securityData")
+            if securities_data.numValues() > 0:
+                cours = securities_data.getValueAsElement(0).getElement("fieldData").getElement("LAST_PRICE").getValue()
+            break
+        elif event.eventType() == blpapi.Event.PARTIAL_RESPONSE:
+            pass
+
+    session.stop()
+    return cours
+
+def lire_colonne_quotation_reference(chemin_fichier):
+    fichier_excel = openpyxl.load_workbook(chemin_fichier)
+    onglet_data = fichier_excel["data"]
+    ligne = 2
+
+    while onglet_data.cell(row=ligne, column=1).value is not None:
+        quotation_reference = onglet_data.cell(row=ligne, column=1).value
+
+        cours = obtenir_cours_bloomberg(quotation_reference)
+
+        if cours is not None:
+            print(f"Quotation Reference à la ligne {ligne}: {quotation_reference}, Cours Bloomberg: {cours}")
+        else:
+            print(f"Quotation Reference à la ligne {ligne}: {quotation_reference}, Cours non disponible")
+
+        ligne += 1
+
+    fichier_excel.close()
+
+# Chemin vers le fichier Excel
+chemin_fichier_excel = "chemin/vers/votre/fichier/excel.xlsx"
+
+# Appelle la fonction pour lire la colonne "quotation_reference" et obtenir les cours depuis Bloomberg
+lire_colonne_quotation_reference(chemin_fichier_excel)
