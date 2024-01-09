@@ -1,0 +1,124 @@
+import pandas as pd
+# Bloomberg
+from xbbg import blp
+from datetime import datetime
+import xlwings as xw
+
+import os
+ 
+os.chdir(r"Q:\S_ptw\Opérations de Marché\Stagiaires\Anbari Khouloud\taux_premier_mois")
+
+cwd = os.getcwd()
+
+def main():
+
+    taux = pd.read_excel(f'{cwd}/verification_taux_1_mois.xlsm',sheet_name="DATA")
+    check = pd.read_excel(f'{cwd}/verification_taux_1_mois.xlsm',sheet_name="CHECK")
+    check_list = taux['QUOTATION_REFERENCE'].values.tolist()
+    
+    taux_bloom = []
+    l_manquant=[]
+    
+    for i in range(len(check)):
+        if check['QUOTATION_REFERENCE'].loc[i] not in check_list:
+            l_manquant.append(check['QUOTATION_REFERENCE'].loc[i]) 
+            
+    df_manquant=pd.DataFrame (l_manquant, columns = ['Data manquant'])        
+    
+    for i in range(len(taux)):
+        
+        if "NDBB" in taux.QUOTATION_REFERENCE [i]:
+            ticker = taux.QUOTATION_REFERENCE [i]+" CMPN Curncy"
+         
+        elif taux.QUOTATION_REFERENCE [i] == "NKDR1" or taux.QUOTATION_REFERENCE [i] == "SKDR1":
+            ticker = taux.QUOTATION_REFERENCE [i]+" CMPL Curncy"
+         
+        elif taux.QUOTATION_REFERENCE [i] == "RFR":
+             
+            if taux.QUOTATION_COUNTRY[i]== "GB" :
+                if taux.QUOTATION_TYPE[i]=="3M":
+                    ticker = "BPSWSC BGN Curncy"
+                elif taux.QUOTATION_TYPE[i]=="6M":
+                    ticker = "BPSWSF BGN Curncy"
+                elif taux.QUOTATION_TYPE[i]=="1Y":
+                    ticker = "BPSWS1 BGN Curncy"
+             
+            elif taux.QUOTATION_COUNTRY[i]== "JP" :
+                if taux.QUOTATION_TYPE[i]=="3M":
+                    ticker = "JYSOC BGN Curncy"
+                elif taux.QUOTATION_TYPE[i]=="6M":
+                    ticker = "JYSOF BGN Curncy"
+                elif taux.QUOTATION_TYPE[i]=="1Y":
+                    ticker = "JYSO1 BGN Curncy"
+             
+            elif taux.QUOTATION_COUNTRY[i]== "CH" :
+                if taux.QUOTATION_TYPE[i]=="3M":
+                    ticker = "SFSNTC BGNL Curncy"
+                elif taux.QUOTATION_TYPE[i]=="6M":
+                    ticker = "SFSNTF BGNL Curncy"
+                elif taux.QUOTATION_TYPE[i]=="1Y":
+                    ticker = "SFSNT1 BGNL Curncy"
+					
+            elif taux.QUOTATION_COUNTRY[i]== "US" :
+                if taux.QUOTATION_TYPE[i]=="3M":
+                    ticker = "USOSFRC BGN Curncy"
+                elif taux.QUOTATION_TYPE[i]=="6M":
+                    ticker = "USOSFRF BGN Curncy"
+                elif taux.QUOTATION_TYPE[i]=="1Y":
+                    ticker = "USOSFR1 BGN Curncy"   
+                    
+            elif taux.QUOTATION_COUNTRY[i]== "TH" :
+                if taux.QUOTATION_TYPE[i]=="3M":
+                    ticker = "TBSWIC BGN Curncy"
+                elif taux.QUOTATION_TYPE[i]=="6M":
+                    ticker = "TBSWIF BGN Curncy"
+                elif taux.QUOTATION_TYPE[i]=="1Y":
+                    ticker = "TBSWI1 BGN Curncy" 
+                                      
+            elif taux.QUOTATION_COUNTRY[i]== "SG" :
+                if taux.QUOTATION_TYPE[i]=="3M":
+                    ticker = "SDSOAC BGN Curncy"
+                elif taux.QUOTATION_TYPE[i]=="6M":
+                    ticker = "SDSOAF BGN Curncy"
+                elif taux.QUOTATION_TYPE[i]=="1Y":
+                    ticker = "SDSOA1 BGN Curncy"   
+					               
+        else :
+            ticker = taux.QUOTATION_REFERENCE [i] + " Index"
+         
+        fixing = blp.bdh(tickers = ticker, start_date = taux.QUOTATION_PERIOD[i] , end_date = taux.QUOTATION_PERIOD[i]) 
+         
+        if len(fixing)>0:
+            taux_bloom.append(float(fixing.iloc[0]))
+        else :
+            fixing = blp.bdh(tickers = ticker, start_date = taux.LAST_UPDATE_DATE[i] , end_date = taux.LAST_UPDATE_DATE[i])
+            if len(fixing)>0:
+                taux_bloom.append(float(fixing.iloc[0]))
+            else:
+                taux_bloom.append("NA")
+    taux['taux_bloom'] = taux_bloom
+    verification = [taux.PX_EXRATE[i] == taux.taux_bloom[i] if taux.QUOTATION_REFERENCE [i] != "RFR" else taux.PX_EXRATE[i] <= taux.taux_bloom[i] + 5/100 and taux.PX_EXRATE[i] >= taux.taux_bloom[i] - 5/100 for i in range(len(taux))  ]
+    taux["verification"] = verification
+	
+    taux["verification"] = (taux.PX_EXRATE == taux.taux_bloom)
+        
+    def highlight(s):
+        if s.verification == False:
+            return ['background-color: yellow']*9
+        else:
+            return ['background-color: white']*9
+        
+        
+    taux = taux.style.apply(highlight, axis=1)
+    
+    with pd.ExcelWriter(f'{cwd}/résultats.xlsx') as writer:  
+        taux.to_excel(writer,sheet_name='vérification BBG')
+        df_manquant.to_excel(writer,sheet_name='Data Manquant')
+       
+    nv = blp.bdh(tickers = ["BPSWSC BGN Curncy","BPSWSF BGN Curncy","BPSWS1 BGN Curncy","JYSOC BGN Curncy","JYSOF BGN Curncy","JYSO1 BGN Curncy","SFSNTC BGNL Curncy","SFSNTF BGNL Curncy","SFSNT1 BGNL Curncy"], start_date =  datetime(2022,10,31), end_date =  datetime(2022,10,31))
+        
+
+
+if __name__ == "__main__":
+    xw.Book("verification_taux_1_mois.xlsm").set_mock_caller()
+    main()
